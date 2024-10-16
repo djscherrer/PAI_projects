@@ -8,7 +8,7 @@ from matplotlib import cm
 
 
 # Set `EXTENDED_EVALUATION` to `True` in order to visualize your predictions.
-EXTENDED_EVALUATION = False
+EXTENDED_EVALUATION = True
 EVALUATION_GRID_POINTS = 300  # Number of grid points used in extended evaluation
 
 # Cost function constants
@@ -31,6 +31,8 @@ class Model(object):
         self.rng = np.random.default_rng(seed=0)
 
         # TODO: Add custom initialization for your model here if necessary
+        kernel = RBF(length_scale=0.01) + WhiteKernel(noise_level=2.0)
+        self.model = GaussianProcessRegressor(kernel=kernel, random_state=0)
 
     def generate_predictions(self, test_coordinates: np.ndarray, test_area_flags: np.ndarray) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -41,14 +43,11 @@ class Model(object):
             Tuple of three 1d NumPy float arrays, each of shape (NUM_SAMPLES,),
             containing your predictions, the GP posterior mean, and the GP posterior stddev (in that order)
         """
-
-        # TODO: Use your GP to estimate the posterior mean and stddev for each city_area here
-        gp_mean = np.zeros(test_coordinates.shape[0], dtype=float)
-        gp_std = np.zeros(test_coordinates.shape[0], dtype=float)
-
         # TODO: Use the GP posterior to form your predictions here
-        predictions = gp_mean
+        gp_mean, gp_std = self.model.predict(test_coordinates, return_std=True)
 
+        # Use the GP posterior to form your predictions
+        predictions = gp_mean  # You can also apply custom logic to adjust the prediction
         return predictions, gp_mean, gp_std
 
     def train_model(self, train_targets: np.ndarray, train_coordinates: np.ndarray, train_area_flags: np.ndarray):
@@ -60,7 +59,8 @@ class Model(object):
         """
 
         # TODO: Fit your model here
-        pass
+        self.model.fit(train_coordinates, train_targets)
+        return
 
 # You don't have to change this function
 def calculate_cost(ground_truth: np.ndarray, predictions: np.ndarray, area_flags: np.ndarray) -> float:
@@ -162,7 +162,7 @@ def execute_extended_evaluation(model: Model, output_dir: str = '/results'):
     fig.savefig(figure_path)
     print(f'Saved extended evaluation to {figure_path}')
 
-    plt.show()
+    #plt.show()
 
 
 def extract_area_information(train_x: np.ndarray, test_x: np.ndarray) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -179,6 +179,10 @@ def extract_area_information(train_x: np.ndarray, test_x: np.ndarray) -> typing.
     test_area_flags = np.zeros((test_x.shape[0],), dtype=bool)
 
     #TODO: Extract the city_area information from the training and test features
+    train_coordinates = train_x[:2000, 0:2]
+    test_coordinates = test_x[:, 0:2]
+    train_area_flags = train_x[:2000, 2:3].ravel().astype(bool)
+    test_area_flags = test_x[:, 2:3].ravel().astype(bool)
 
     assert train_coordinates.shape[0] == train_area_flags.shape[0] and test_coordinates.shape[0] == test_area_flags.shape[0]
     assert train_coordinates.shape[1] == 2 and test_coordinates.shape[1] == 2
@@ -199,7 +203,7 @@ def main():
     # Fit the model
     print('Training model')
     model = Model()
-    model.train_model(train_y, train_coordinates, train_area_flags)
+    model.train_model(train_y[:2000], train_coordinates, train_area_flags)
 
     # Predict on the test features
     print('Predicting on test features')
